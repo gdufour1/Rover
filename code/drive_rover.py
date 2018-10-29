@@ -1,4 +1,3 @@
-pip install python-socketio# Do the necessary imports
 import argparse
 import shutil
 import base64

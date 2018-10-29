@@ -74,8 +74,8 @@ def perspect_transform(img, src, dst):
            
     M = cv2.getPerspectiveTransform(src, dst)
     warped = cv2.warpPerspective(img, M, (img.shape[1], img.shape[0]))# keep same size as input image
-    
-    return warped
+    mask = cv2.warpPerspective(np.ones_like(img[:, :, 0]), M, (img.shape[1], img.shape[0]))
+    return warped, mask
 
 def find_rocks(img, levels=(110, 110, 50)):
     rockpix = ((img[:, :, 0] > levels[0]) \
@@ -115,9 +115,9 @@ def perception_step(Rover):
     # Identify pixels above the threshold
     # Threshold of RGB > 160 does a nice job of identifying ground pixels only
 
-
     threshed = color_thresh(warped)
     obs_map = np.absolute(np.float32(threshed) - 1) * mask
+    rock_map = np.absolute(np.float32(threshed) - 1) * mask
 
 
     # 4) Update Rover.vision_image (this will be displayed on left side of screen)
@@ -133,7 +133,11 @@ def perception_step(Rover):
     # 6) Convert rover-centric pixel values to world coordinates
     world_size = Rover.worldmap.shape[0]
     scale = 2 * dst_size
-    x_world, y_world = pix_to_world(absxpix, absypix, Rover.pos[0], Rover.pos[1], Rover.yaw, world_size, scale)
+    obsxpix, obsypix = rover_coords(obs_map)
+    rockxpix, rockypix = rover_coords(rock_map)
+    obs_x_world, obs_y_world = pix_to_world(obsxpix, obsypix, Rover.pos[0], Rover.pos[1], Rover.yaw, world_size, scale)
+    x_world, y_world = pix_to_world(obsxpix, obsypix, Rover.pos[0], Rover.pos[1], Rover.yaw, world_size, scale)
+    rock_x_world, rock_y_world = pix_to_world(rockxpix, rockypix, Rover.pos[0], Rover.pos[1], Rover.yaw, world_size, scale)
     # 7) Update Rover worldmap (to be displayed on right side of screen)
     Rover.worldmap[y_world, x_world, 2] = 10
     Rover.worldmap[obs_y_world, obs_x_world, 0] = 1
@@ -149,7 +153,7 @@ def perception_step(Rover):
         # Rover.nav_dists = rover_centric_pixel_distances
         # Rover.nav_angles = rover_centric_angles
 
-    rock_map = find_rocks(warped, levels(110, 110, 50))
+    rock_map = find_rocks(warped, levels=(110, 110, 50))
     if rock_map.any():
         rock_x, rock_y = rover_coords(rock_map)
 
@@ -162,7 +166,7 @@ def perception_step(Rover):
         Rover.worldmap[rock_ycen, rock_xcen, 1] * 255
         Rover.vision_image[:,:, 1] = rock_map * 255
     else:
-        Rover.vision.image[:,:, 1] * 0
+        Rover.vision_image[:,:, 1] = 0
     
     
     return Rover
